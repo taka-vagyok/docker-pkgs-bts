@@ -1,0 +1,95 @@
+version: '3.5'
+services:
+##################################################################
+# redmine
+##################################################################
+  redmine:
+    image: redmine:passenger
+    container_name: redmine
+    restart: always
+    ports:
+      - 3080:3000
+    env_file:
+      - database.env
+      - redmine.env
+    depends_on:
+      - mysql
+      - memcached
+    volumes:
+      - ./cdata/redmine/files:/usr/src/redmine/files
+      - ./cdata/redmine/log:/usr/src/redmine/log
+      - ./cdata/redmine/plugins:/usr/src/redmine/plugins
+      - ./cdata/redmine/public/themes:/usr/src/redmine/public/themes
+  ############
+  # database
+  ############
+  mysql:
+    image: mysql:5.7
+    container_name: mysql
+    restart: always
+    env_file:
+      - database.env
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./cdata/mysql/initd:/docker-entrypoint-initdb.d
+    command: mysqld --character-set-server=utf8mb4 --collation-server=utf8mb4_bin
+  ############
+  # cache
+  ############
+  memcached:
+    image: memcached
+    container_name: memcached
+    restart: always
+#    ports:
+#      - 11211:11211
+
+##################################################################
+# metabase config ( to check redmine status )
+##################################################################
+  metabase:
+    image: metabase/metabase
+    container_name: metabase
+    restart: always
+    ports:
+      - 3081:3000
+  #   env_file:
+  #     - database.env
+    environment:
+      JAVA_TIMEZONE: Asia/Tokyo
+      MB_DB_FILE: /metabase/data/metabase.db
+      LANG:  ja_JP.UTF-8
+      LC_ALL: ja_JP.UTF-8
+      LC_CTYPE: ja_JP.UTF-8
+    volumes:
+      - ./cdata/metabase/data:/metabase/data
+      - ./cdata/metabase/plugin:/plugins
+
+  #################################################################
+  # https://qiita.com/yoshiyasu1111/items/c2d7d5f9a70afdaa8372
+  #################################################################
+  ldap-server:
+    image: osixia/openldap:latest
+    restart: always
+    container_name: ldap-host
+    environment:
+      LDAP_ORGANISATION: "rdm"
+      LDAP_DOMAIN: "rdm.com"
+      LDAP_ADMIN_PASSWORD: "password"
+    volumes:
+      - ./cdata/ldap/database:/var/lib/ldap
+      - ./cdata/ldap/config:/etc/ldap/slapd.d
+  ldap-admin:
+    image: osixia/phpldapadmin:latest
+    restart: always
+    container_name: ldap-admin
+    environment:
+      PHPLDAPADMIN_LDAP_HOSTS: "ldap"
+      PHPLDAPADMIN_HTTPS: "false"
+    ports:
+      - 3082:80
+    links:
+      - "ldap-server:ldap"
+volumes:
+  mysql-data:
+    # [TODO] backup/restore
+    name: mysql-redmine
